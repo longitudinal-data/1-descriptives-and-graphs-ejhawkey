@@ -1,0 +1,50 @@
+---
+title: "ALDA_HW2_EH"
+author: "Elizabeth Hawkey"
+date: "9/14/2017"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{}
+library(lme4)
+PDS_data_mlm <- read.csv(file = "~/Documents/PDS_project/Longitudinal_project/datasets/PDS_long_09_9_17_final.csv")
+View(PDS_data)
+```
+
+
+#1.Run linear models on all of your subjects (a basic regression). What is the average intercept, the average slope?
+
+```{load data}
+
+```
+
+#2. Now run a mlm/lmer model with only a random intercept. What is the ICC? What does residual variance look like compared to linear model? Create a graph to show this effect.
+
+#3. Introduce a fixed slope term. What is the difference in terms of the fixed effects estimates between this estimate and the previous? Of the residual standard error? Create a graph to show both fixed effects estimates and the CIs around them.
+
+#4. Run an additional model with a random slope. How does this change compare to the previous model? Should you keep the random slope or not?
+
+#5. Interpret the correlation between the slope and the intercept.
+
+#6. Create a density plot of the random effects from your final model.
+
+#7. Create a catepilar plot of the random effects. Is there any person that seems odd in terms of a large standard errors around intercept and slope estimates?
+
+#8. Create a plot of the trajectory, along with a spaghetti plot of each person’s individual slope. Set the alpha level (transparency) on the individual slopes to make them easier to see.
+
+#9. Create a plot of the trajectory, along with a spagehtti plot of each person’s individual slope. Set the alpha level (transperancy) on the individual slopes to make them easier to see.
+
+
+
+## Including Plots: You can also embed plots, for example:
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
