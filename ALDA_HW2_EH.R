@@ -5,7 +5,7 @@ library(tidyverse)
 library(broom)
 
 PDS_data_mlm <- read.csv(file = "~/Documents/PDS_project/Longitudinal_project/datasets/PDS_long_hw.csv")
-View(PDS_data_mlm)
+#View(PDS_data_mlm)
 PDS_data_mlm$AGEMOSCAN <- as.numeric(PDS_data_mlm$AGEMOSCAN)
 PDS_data_mlm$ADHDsum <- as.numeric(PDS_data_mlm$ADHDsum)
 PDS_data_mlm$ADHD_INsum <- as.numeric(PDS_data_mlm$ADHD_INsum)
@@ -33,7 +33,7 @@ library(dplyr) #can select specific variables
 PDS_data_mlm_rm <- PDS_data_mlm %>% #only include selected variables in newdata
   select(Subid_fMRI, ADHDsum, CONP_EF_T, SAL_GE_K1to5, SAL_GE_K6to10)
 PDS_data_mlm_rm <- na.omit(PDS_data_mlm_rm)
-View(PDS_data_mlm_rm)
+#View(PDS_data_mlm_rm)
 
 mod.2 <- lmer(ADHDsum ~ 1 + (1 | Subid_fMRI), data = PDS_data_mlm_rm)
 summary(mod.2)

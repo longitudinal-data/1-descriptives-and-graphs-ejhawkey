@@ -1,0 +1,152 @@
+---
+title: "ALDA_HW3_EH"
+author: "Elizabeth Hawkey"
+date: "9/24/2017"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(lme4)
+library(tidyverse)
+library(broom)
+library(tidyr)
+library(merTools)
+PDS_data_2 <- read.csv(file =  "~/Documents/PDS_project/Longitudinal_project/datasets/PDS_long_final.csv")
+PDS_data_2$AGEMOSCAN <- as.numeric(PDS_data_2$AGEMOSCAN)
+PDS_data_2$ADHDsum <- as.numeric(PDS_data_2$ADHDsum)
+PDS_data_2$ADHD_INsum <- as.numeric(PDS_data_2$ADHD_INsum)
+PDS_data_2$ADHD_HYIMsum<- as.numeric(PDS_data_2$ADHD_HYIMsum)
+```
+
+#1. Run a series of models using a time-invariant nominal covariate. a) where the covariate only predicts the intercept b) predicts both intercept and slope c) is rescaled eg centering. For all models, how does your model change from model to model. What is your final model?
+
+```{r}
+#nominal covariate = sex
+#a) where the covariate only predicts the intercept
+
+mod.1 <- lmer(ADHDsum ~ agemo_converted + sex + (1|Subid_fMRI), data=PDS_data_2)
+summary(mod.1)
+
+#b) predicts both intercept and slope 
+mod.2 <- lmer(ADHDsum ~ agemo_converted + sex + (agemo_converted|Subid_fMRI), data=PDS_data_2)
+summary(mod.2)
+
+#c) is rescaled eg centering
+sex_c <- scale(PDS_data_2$sex, center = T, scale = F)
+PDS_data_2$sex_c <- as.numeric(sex_c)
+mod.3 <- lmer(ADHDsum ~ agemo_converted + sex_c + (agemo_converted|Subid_fMRI), data=PDS_data_2)
+summary(mod.3)
+
+```
+##The model fit improves (explains more of the variance) when a time variable is added, showing that sex is a more useful predictor of ADHD symptoms when the slopes are allowed to vary by subject. Centering sex does not improve the model.
+
+
+#2. Introduce a time-invariant continuous covariate and run models a-c from #1.
+
+```{r}
+#continuous covariate = SES (Income_to_Need_Scan)
+#a) where the covariate only predicts the intercept
+
+mod.4 <- lmer(ADHDsum ~ Income_to_Need_Scan + (1|Subid_fMRI), data=PDS_data_2)
+summary(mod.4)
+
+#b) predicts both intercept and slope 
+mod.5 <- lmer(ADHDsum ~ agemo_converted + Income_to_Need_Scan + (agemo_converted|Subid_fMRI), data=PDS_data_2)
+summary(mod.5)
+
+#c) is rescaled eg centering
+Income_to_Need_Scan_c <- scale(PDS_data_2$ Income_to_Need_Scan , center = T, scale = F)
+PDS_data_2$ Income_to_Need_Scan_c <- as.numeric(Income_to_Need_Scan_c)
+mod.6 <- lmer(ADHDsum ~ agemo_converted + Income_to_Need_Scan_c + (agemo_converted|Subid_fMRI), data=PDS_data_2)
+summary(mod.6)
+
+
+```
+
+#3. Graph both of your final models for the continuous and nominal models above.
+Calculate confidence intervals around your estimates for your final models
+
+```{r, echo=FALSE, warning=FALSE}
+#nominal model graph
+
+
+invisible(Predict.1 <- predictInterval(merMod = mod.3, newdata = PDS_data_2, level = 0.9, n.sims = 1000, 
+                           stat = "median", include.resid.var = TRUE))
+
+Predict.1$agemo_converted<- PDS_data_2$agemo_converted
+Predict.1$Subid_fMRI <- PDS_data_2$Subid_fMRI
+
+invisible(p.1 <- ggplot(aes(x = agemo_converted, y = fit), data = Predict.1) +
+  geom_point(color = "cornflowerblue", size = .5) +
+  labs(x="Age in Months", y="ADHD symptoms") + theme_bw() + 
+  geom_line(data = Predict.1, aes(x = agemo_converted, y = fit, group=Subid_fMRI, color = Subid_fMRI), alpha = .4, size = .8) +
+  stat_smooth(method = lm, se = T, size = 2, color = "cornflowerblue", alpha = .8) +
+  ggtitle("Change in ADHD Symptoms Across Time") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_gray())
+p.1 + theme(legend.position="none")
+
+#continuous model graph
+invisible(Predict.2 <- predictInterval(merMod = mod.6, newdata = PDS_data_2, level = 0.9, n.sims = 1000, 
+                           stat = "median", include.resid.var = TRUE))
+
+Predict.2$agemo_converted<- PDS_data_2$agemo_converted
+Predict.2$Subid_fMRI <- PDS_data_2$Subid_fMRI
+
+invisible(p.2 <- ggplot(aes(x = agemo_converted, y = fit), data = Predict.2) +
+  geom_point(color = "blue", size = .5) +
+  labs(x="Age in Months", y="ADHD Symptoms") + theme_bw() + 
+  geom_line(data = Predict.2, aes(x = agemo_converted, y = fit, group=Subid_fMRI, color = Subid_fMRI), alpha = .4, size = .8) +
+  stat_smooth(method = lm, se = T, size = 2, color = "blue", alpha = .8) +
+  ggtitle("Change in ADHD Symptoms Across Time") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_gray())
+p.2 + theme(legend.position="none")
+
+###Calculate CI for final models
+confint(mod.3, level = 0.95)
+confint(mod.6, level = 0.95)
+```
+
+#4. Include both types of covariates in a single model. How does your interpretation of parameters change?
+
+```{r}
+mod.7 <- lmer(ADHDsum ~ agemo_converted + Income_to_Need_Scan_c + sex_c + (agemo_converted|Subid_fMRI), data=PDS_data_2)
+summary(mod.7)
+
+anova(mod.6, mod.7)
+```
+##Model 7 (including both covariates) appears to be a better fit since the AIC values are smaller.
+
+
+#5. If you have one available, introduce a time-varying covariate.
+
+```{r}
+#time-varying covariate = MDD symptoms at each scan
+mod.8 <- lmer(ADHDsum ~ agemo_converted + MDDCorescan + Income_to_Need_Scan_c + sex_c + (agemo_converted|Subid_fMRI), data=PDS_data_2)
+summary(mod.8)
+
+anova(mod.7, mod.8)
+
+```
+
+#6. Create a density plot of the random effects from your final model.
+
+```{r}
+library(merTools)
+re.sim <- REsim(mod.7)
+head(re.sim)
+p.3 <- re.sim %>% 
+  filter(term == "(Intercept)") 
+
+
+ggplot(p.3, aes(mean)) +
+  geom_density()
+```
+
