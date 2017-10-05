@@ -1,0 +1,132 @@
+---
+title: "Conditional_Models_EH"
+author: "Elizabeth Hawkey"
+date: "10/5/2017"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, results = 'hide', message = F, warning = F}
+library(psych)
+library(sjPlot)
+library(broom)
+library(lme4)
+library(MuMIn)
+library(merTools)
+library(reghelper)
+library(stargazer)
+library(lsmeans)
+library(multcompView)
+library(plyr)
+library(tidyverse)
+
+PDS_data_2 <- read.csv(file =  "~/Documents/PDS_project/Longitudinal_project/datasets/PDS_long_final.csv")
+PDS_data_2$AGEMOSCAN <- as.numeric(PDS_data_2$AGEMOSCAN)
+PDS_data_2$ADHDsum <- as.numeric(PDS_data_2$ADHDsum)
+PDS_data_2$ADHD_INsum <- as.numeric(PDS_data_2$ADHD_INsum)
+PDS_data_2$ADHD_HYIMsum<- as.numeric(PDS_data_2$ADHD_HYIMsum)
+
+mod.8 <- lmer(ADHDsum ~ agemo_converted + MDDCorescan + Income_to_Need_Scan_c + sex_c + (agemo_converted|Subid_fMRI), data=PDS_data_2)
+summary(mod.8)
+```
+
+#Below is code that *should* work for all models. Just run the function and save it as an `R` object. You can use this with `papaja` and the `apa_table()` function pretty easily. The trick is that if you are not using the papaja template, the proper LaTeX packages may not be loaded. You can get around this by attaching a .tex file calling the packages under "in_header: header.tex" in your YAML header. The YAML header of this .Rmd file contains the necessary syntax and the header.tex file with the proper packages.
+ 
+```{r, echo = T, results = 'hide'}
+## here's some code to make a table. You shouldn't need to modify anything here 
+# unless you add additional random effects terms
+## fixed effects first ##
+table_fun <- function(model){
+  fixed <- broom::tidy(model) %>% filter(group == "fixed") %>%
+    select(term, estimate) 
+  ## add random effects ##
+  rand <- broom::tidy(model) %>% filter(group != "fixed") %>%
+    select(term, estimate)
+  ## get confidence intervals ##
+  CI <- data.frame(confint.merMod(model, method = "boot", nsim = 10)) %>%
+    mutate(term = rownames(.)) %>% setNames(c("lower", "upper", "term"))
+  
+  ## Get ICC & R2 values ##
+  ICC <- reghelper::ICC(model)
+  R2 <- MuMIn::r.squaredGLMM(model)
+  
+  ## format the fixed effects
+  fixed <- fixed %>% left_join(CI %>% filter(!grepl(".sig", term))) %>%
+    mutate(type = "Fixed Parts")
+  
+  rand <- rand %>%
+    mutate(estimate = ifelse(grepl("cor", term) == T, estimate, estimate^2),
+          term = mapvalues(term, unique(term), 
+           c("$\\tau_{00}$", "$\\tau_{11}$", "$\\tau_{10}$", "$\\hat{\\sigma^2}$"))) %>%
+    left_join(
+      CI %>% filter(grepl(".sig", term)) %>%
+        mutate(term = mapvalues(term, unique(term), 
+            c("$\\tau_{00}$", "$\\tau_{10}$", "$\\tau_{11}$", "$\\hat{\\sigma^2}$")),
+            lower = lower^2, upper = upper^2)) %>%
+    mutate(type = "Random Parts")
+  
+  mod_terms <- tribble(
+    ~term, ~estimate, ~type,
+    "ICC", ICC, "Model Terms",
+    "$R^2_m$", R2[1], "Model Terms",
+    "$R^2_c$", R2[2], "Model Terms"
+  )
+  
+  tab <- fixed %>%
+    full_join(rand) %>%
+    mutate(CI = sprintf("(%.2f, %.2f)", lower, upper)) %>%
+    select(-lower, -upper) %>%
+    full_join(mod_terms) %>%
+    mutate(estimate = sprintf("%.2f", estimate)) %>%
+    dplyr::rename(b = estimate) %>%
+    select(type, everything())
+  return(tab)
+}
+# you can use this with papaja and the apa_table function pretty easily
+# the trick is that if you are not using the papaja template, the proper
+# LaTeX packages may not be loaded. You can get around this by attaching
+# a .tex file calling the packages under "in_header: header.tex" in your YAML
+# header the YAML header of this .Rmd file contains the necessary syntax and 
+# the header.tex file with the proper packages
+
+tab <- table_fun(mod.8)
+```
+
+
+```{r}
+options(knitr.kable.NA = '')
+knitr::kable(tab, caption = "Ugly MLM Table Example")
+```
+
+### Alternative: `papaja` + `apa_table()`  
+
+```{r, results = 'asis'}
+papaja::apa_table(tab %>% select(-type),caption = "papaja MLM Table Example", 
+    na_string = "", stub_indents = list(Fixed = c(1:4), Random = c(5:8), Summary = c(9:11)),
+    col_spanners = list(`Sensation Seeking` = c(2,3)))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+#continuous model graph
+invisible(Predict.2 <- predictInterval(merMod = mod.8, newdata = PDS_data_2, level = 0.9, n.sims = 1000, 
+                           stat = "median", include.resid.var = TRUE))
+
+Predict.2$agemo_converted<- PDS_data_2$agemo_converted
+Predict.2$Subid_fMRI <- PDS_data_2$Subid_fMRI
+
+invisible(p.2 <- ggplot(aes(x = agemo_converted, y = fit), data = Predict.2) +
+  geom_point(color = "blue", size = .5) +
+  labs(x="Age in Months", y="ADHD Symptoms") + theme_bw() + 
+  geom_line(data = Predict.2, aes(x = agemo_converted, y = fit, group=Subid_fMRI, color = Subid_fMRI), alpha = .4, size = .8) +
+  stat_smooth(method = lm, se = T, size = 2, color = "blue", alpha = .8) +
+  ggtitle("Change in ADHD Symptoms - Controlling for MDD Symptoms") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_gray())
+p.2 + theme(legend.position="none")
+```
+
