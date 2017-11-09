@@ -1,0 +1,216 @@
+---
+title: "Class Presentation"
+author: "Elizabeth Hawkey"
+date: "11/5/2017"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1a. Data Wrangling
+```{r}
+library(lme4)
+library(tidyverse)
+library(broom)
+library(dplyr)
+library(psych)
+library(tidyr)
+library(merTools)
+library(lavaan)
+library(semTools)
+library(semPlot)
+
+PDS_stats1 <- read.csv(file =  "~/ejhawkey/STATS_resting_state_BRIEF.csv")
+PDS_stats2 <- read.csv(file =  "~/ejhawkey/STATS_resting_state_BRIEF2.csv")
+
+# often, stringsAsFactors = FALSE is useful
+#names(PDS_stats2)
+
+#Combine variables (at T3 there were two versions of the BRIEF: preschool and childhood)
+#PDS_stats$T3gecrs_combined <- PDS_stats$T3gecrs + PDS_stats$T3gecrsP (tried this first it didn't work)
+
+T3_gecrscombined <- PDS_stats2$T3_gecrs;   # start new column with one of the columns
+inds <- which(is.na(PDS_stats2$T3_gecrsP) == FALSE);  # find non-NA entries in T3gecrsP
+if (length(which(!is.na(T3_gecrscombined[inds]))) > 0) { stop("overlapping values??"); }
+T3_gecrscombined[inds] <- PDS_stats2$T3_gecrsP[inds];  # stick the values in
+PDS_stats2 <- data.frame(PDS_stats2, T3_gecrscombined);  # add new column in to existing dataframe
+PDS_stats2$T3_gecrs <- PDS_stats2$T3_gecrscombined
+describe(PDS_stats2$T3_gecrs)
+
+#PDS_stats2$T1_agemonthsc <- scale(PDS_stats2$T1_agemonths, center = T, scale = F)
+
+#Move data into a long format and a wide format.
+wide_to_long_stats <- PDS_stats1 %>%
+  gather(T1_sex:S3_DMNGEK6to10, key = "time", value = "value") 
+
+wide_to_long_stats_1 <- wide_to_long_stats %>%
+  separate(time, into = c("timepoint", "var"), sep = "_", convert = TRUE) %>%
+  spread(key = var, value = value) %>%
+  arrange(Subid) 
+#View(wide_to_long_stats_2)
+
+#Discuss ways to deal with layered longitudinal designs
+#create a wave number to account for people starting at different waves
+#this 
+#dataframe <- dataframe %>%
+  #group_by(Subid) %>%
+  #mutate(wave = seq_len(n()))
+
+#boxplot
+library(ggplot2)
+gg1 <-ggplot(data = wide_to_long_stats_1, aes(x = timepoint, y = gecrs)) +
+  geom_boxplot(notch=FALSE, alpha=.8, outlier.colour = "gray", weight = 2, linetype = "longdash", colour="black") + 
+  labs(x = "Timepoint", y = "EF Score") +
+  xlim("T3", "T12", "T14") +
+  ggtitle("Executive Function") +
+  theme_minimal()
+gg1
+
+
+##Plot EF Composite score across 3 timepoints
+gg2 <- ggplot(data = wide_to_long_stats_1,
+          aes(x = timepoint, y = gecrs, group = Subid)) + geom_line(alpha = .5) +
+          aes(colour = factor(Subid)) + guides(colour=FALSE) +
+          xlim("T3", "T12", "T14") + 
+          theme_minimal()
+gg2
+
+
+```
+
+
+##More data wrangling. 
+```{r}
+
+#Move data with new combined variable into a long format again.
+wide_to_long_stats <- PDS_stats2 %>%
+  gather(T1_sex:T3_gecrscombined, key = "time", value = "value") 
+
+wide_to_long_stats_2 <- wide_to_long_stats %>%
+  separate(time, into = c("timepoint", "var"), sep = "_", convert = TRUE) %>%
+  spread(key = var, value = value) %>%
+  arrange(Subid) 
+#View(wide_to_long_stats_2)
+
+
+##Plot EF Composite score across 3 timepoints with combined T3 variable
+gg3 <- ggplot(data = wide_to_long_stats_2,
+          aes(x = timepoint, y = gecrs, group = Subid)) + geom_line(alpha = .5) +
+          aes(colour = factor(Subid)) + guides(colour=FALSE) +
+          xlim("T3", "T12", "T14") +
+          theme_minimal()
+gg3
+
+#create a new variable to adjust EF to a scale that is closer to GE (to help models converge)
+#wide_to_long_stats_2$gecrsconv <- as.numeric(wide_to_long_stats_2$gecrs/100)
+
+
+```
+
+
+#1. Run a series of MLM models using a categorical time variable. a) where the covariate only predicts the intercept b) predicts both intercept and slope c) is rescaled eg centering.
+```{r}
+##CATEGORICAL TIME VARIABLE
+#a) only predicts the intercept
+mod.1 <- lmer(gecrs ~ timepoint + (1|Subid), data = wide_to_long_stats_2)
+summary(mod.1)
+
+#b) predicts both intercept and slope 
+mod.2 <- lmer(gecrs ~ timepoint + (timepoint|Subid), data = wide_to_long_stats_2)
+summary(mod.2)
+
+anova(mod.1, mod.2)
+
+#WHAT IS THE PROBLEM HERE? UNEVEN GROUPS, CATEGORICAL PREDICTOR - CHARACTER?
+describe.by(wide_to_long_stats_2$gecrs, group = wide_to_long_stats_2$timepoint)
+
+##CONTINUOUS TIME VARIABLE
+#adding time predicting intercept - fixed slope
+mod.3 <- lmer(gecrs ~ agemonths + (1|Subid), data = wide_to_long_stats_2)
+summary(mod.3)
+
+#adding time - random slope
+mod.4 <- lmer(gecrs ~ agemonths + (agemonths_c|Subid), data = wide_to_long_stats_2)
+summary(mod.4)
+
+anova(mod.3, mod.4)
+
+```
+
+#2a. Second order growth models - on BRIEF (using BRIEF composite scores (GEC = BRI + MI)
+#Begin with a simple CFA to determine if latent variable is appropriate
+
+For longitudinal models, occasion specific variance can lead to biased estimates. We want to separate the time specific variance from the overall construct variance. Or, we want to make sure that the time specific variance doesn’t make it appear that a construct is changing when really it is not.
+
+```{r, warning = FALSE}
+
+PDS_stats1 <- read.csv(file =  "~/ejhawkey/STATS_resting_state_BRIEF.csv")
+
+GEC.model <- 'BRI_T3 =~ T3inhibrs + T3shftrs + T3emcnrs 
+              MI_T3 =~ T3initirs + T3wrkmrs + T3plorgrs + T
+fit.GEC <- cfa(GEC.model, data = PDS_stats, missing = "ML") 
+summary(fit.GEC, fit.measures = TRUE) \
+```
+
+#2b. Build second order growth models 
+```{r}
+sec.order <- '
+###define latent variables
+EFT3 =~ NA*T3brirs + L1*T3brirs + L2*T3mirs 
+EFT12 =~ NA*T12brirs + L1*T12brirs + L2*T12mirs 
+EFT14=~ NA*T14brirs + L1*T14brirs + L2*T14mirs
+
+### intercepts
+T3brirs ~ t1*1
+T3mirs ~ t2*1
+
+T12brirs ~ t1*1
+T12mirs ~ t2*1
+
+T14brirs ~ t1*1
+T14mirs ~ t2*1
+
+#this is setting the means equal across waves
+
+## correlated residuals across time
+T3brirs ~~ T3mirs
+T12brirs ~~ T12mirs
+T14brirs ~~ T14mirs
+
+## latent variable intercepts
+EFT3 ~ 0*1
+EFT12 ~ 0*1
+EFT14 ~ 0*1
+
+#model constraints for effect coding
+## loadings must average to 1 (the three here changes to how many indicators you have; so change this based on the # of indicators)
+L1 == 2 - L2
+## means of indicators must average to 0 (in terms of the indicator means; )
+t1 == 0 - t2
+
+#the intercept and slope done with effect coding will give you the actual metric from your indicator variables (puts it in whatever metric you were measuring them in)
+
+#final step is the normal growth model
+i =~ 1*EFT3 + 1*EFT12 + 1*EFT14 
+s =~ 0*EFT3 + 1*EFT12 + 2*EFT14 '
+
+fit.sec.order <- growth(sec.order, data=PDS_stats)
+summary(fit.sec.order, fit.measures=TRUE)
+
+#Correlation between indicators for LV "EFT3"
+m1= data.frame(PDS_stats$T3brirs, PDS_stats$T3mirs)
+cor(m1, use="complete.obs")
+
+
+#josh's code
+#fit.sec.order <- growth(sec.order, data=long, missing = "ML")
+#summary(fit.sec.order, fit.measures=TRUE)
+```
+
+3. Semplots for each of the models
+```{r, echo=FALSE, warning=FALSE}
+
+```
