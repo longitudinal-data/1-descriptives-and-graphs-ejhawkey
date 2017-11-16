@@ -180,6 +180,3 @@ semPaths(fit.sec.order, what = "std")
 #Second-order growth models add a second level of latent variables representing a latent construct measured by multiple items at each time point
 
 #The factor loading (λ) for each item is interpreted as a regression slope relating the observed score to the latent construct. Loadings represent the amount of change in the observed score given a one unit change in the amount of the latent construct. Item intercepts (τ) represent the value of the observed score on an item when the value of the latent construct is zero.
-
-#In order to identify the measurement part of the model, one indicator at each time point is
-designated the scale indicator. The loadings of the scale indicators are set to one and the intercepts are set to zero. This sets the metric of the latent variable equal to the metric of the scale indicator. Intercepts for the remaining indicators are obtained by regressing the variables on the constant 1 (represented by a triangle). 
