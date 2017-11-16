@@ -45,7 +45,6 @@ as.numeric(as.character(unlist(growth_stats[,id])))
  summary (Intercept.only.fit)
  semPaths(Intercept.only.fit, what = "paths", whatLabels= "est", layout = "tree")
 
-
 # with a fixed slope
  fixed.slope= ' i=~ 1*T3gecrs_combined_conv + 1*T12gecrs_conv + 1*T14gecrs_conv
  s=~ 0*T3gecrs_combined_conv + 1*T12gecrs_conv + 2*T14gecrs_conv
