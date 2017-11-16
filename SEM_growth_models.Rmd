@@ -3,16 +3,17 @@ title: "SEM Growth Models"
 author: "Elizabeth Hawkey"
 date: "11/5/2017"
 output:
-  pdf_document: default
+  pdf_document: 
+    latex_engine: xelatex
   word_document: default
 ---
-
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r, echo=TRUE, warning=FALSE}
+
 library(lavaan)
 library(lme4)
 library(tidyverse)
@@ -31,8 +32,6 @@ growth_stats <- read.csv(file =  "~/ejhawkey/STATS_resting_state_BRIEF.csv")
 growth_stats$T3gecrs_combined_conv <- as.numeric(growth_stats$T3_gecrscombined/100)
 growth_stats$T12gecrs_conv  <- as.numeric(growth_stats$T12_gecrs/100)
 growth_stats$T14gecrs_conv=growth_stats$T14_gecrs/100
-as.numeric(as.character(unlist(growth_stats[,id])))
-
 ```
 
 
@@ -68,28 +67,28 @@ as.numeric(as.character(unlist(growth_stats[,id])))
 
 ```
 
-1b. Multivariate growth curves - start with this first (just using indicators - no latent variables)
+#1b. Multivariate growth curves - start with this first (just using indicators - no latent variables)
 #As a rule of thumb you need at least three indicators for each latent variable.
 
 ```{r, echo=FALSE, warning=FALSE}
 
 model.bi <- '
 #create global composite EF growth model
-    i.p =~ 1*T3gecrs_combined_conv + 1*T12gecrs_conv + 1*T14gecrs_conv
-    s.p =~ 0*T3gecrs_combined_conv + 1*T12gecrs_conv + 2*T14gecrs_conv 
+    i.behavior =~ 1*T3gecrs_combined_conv + 1*T12gecrs_conv + 1*T14gecrs_conv
+    s.behavior =~ 0*T3gecrs_combined_conv + 1*T12gecrs_conv + 2*T14gecrs_conv 
 
 #create Global efficiency growth model 
-    i.n =~ 1*S1_FPNGEK1to5 + 1*S2_FPNGEK1to5 + 1*S3_FPNGEK1to5 
-    s.n =~ 0*S1_FPNGEK1to5 + 1*S2_FPNGEK1to5 + 2*S3_FPNGEK1to5 
+    i.network =~ 1*S1_FPNGEK1to5 + 1*S2_FPNGEK1to5 + 1*S3_FPNGEK1to5 
+    s.network =~ 0*S1_FPNGEK1to5 + 1*S2_FPNGEK1to5 + 2*S3_FPNGEK1to5 
 '
 fit.bi <- growth(model.bi, missing = "ML", data = growth_stats)
+
 summary(fit.bi)
 varTable(fit.bi)
 
 inspect(fit.bi, what = "free")
 
 # if you get a negative variance (LV ~~0*LV)
-
 
 ```
 
@@ -99,9 +98,10 @@ inspect(fit.bi, what = "free")
 #Begin with a simple CFA to determine if latent variable is appropriate
 
 ```{r, warning = FALSE}
-
+#BRIEF: Behavioral Regulation Index
 BRI.model <- ' BRI.T3 =~ T3_inhibrs + T3_shftrs + T3_emcnrs ' 
 fit= cfa(BRI.model, data=growth_stats, missing= "ML")
+##Options: std.lv = TRUE: standardizes latent var. (but not your results) uses fixed factor method
 summary(fit, fit.measures=TRUE)
 ```
 
@@ -164,11 +164,22 @@ summary(fit.sec.order, fit.measures=TRUE)
 ```
 
 
-3. Semplots 
+#Semplots 
 ```{r, echo=FALSE, warning=FALSE}
 semPaths(fit.sec.order, whatLabels = "std")
+```
+
+#Semplots 
+```{r, echo=FALSE, warning=FALSE}
 semPaths(fit.sec.order, what = "std")
 ```
 
 
 #For longitudinal models, occasion specific variance can lead to biased estimates. We want to separate the time specific variance from the overall construct variance. Or, we want to make sure that the time specific variance doesn’t make it appear that a construct is changing when really it is not.
+
+#Second-order growth models add a second level of latent variables representing a latent construct measured by multiple items at each time point
+
+#The factor loading (λ) for each item is interpreted as a regression slope relating the observed score to the latent construct. Loadings represent the amount of change in the observed score given a one unit change in the amount of the latent construct. Item intercepts (τ) represent the value of the observed score on an item when the value of the latent construct is zero.
+
+#In order to identify the measurement part of the model, one indicator at each time point is
+designated the scale indicator. The loadings of the scale indicators are set to one and the intercepts are set to zero. This sets the metric of the latent variable equal to the metric of the scale indicator. Intercepts for the remaining indicators are obtained by regressing the variables on the constant 1 (represented by a triangle). 
