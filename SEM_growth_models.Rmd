@@ -1,0 +1,175 @@
+---
+title: "SEM Growth Models"
+author: "Elizabeth Hawkey"
+date: "11/5/2017"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(lavaan)
+library(lme4)
+library(tidyverse)
+library(broom)
+library(dplyr)
+library(psych)
+library(tidyr)
+library(merTools)
+library(lavaan)
+library(semTools)
+library(semPlot)
+
+growth_stats <- read.csv(file =  "~/ejhawkey/STATS_resting_state_BRIEF.csv")
+
+#convert variables
+growth_stats$T3gecrs_combined_conv <- as.numeric(growth_stats$T3_gecrscombined/100)
+growth_stats$T12gecrs_conv  <- as.numeric(growth_stats$T12_gecrs/100)
+growth_stats$T14gecrs_conv=growth_stats$T14_gecrs/100
+as.numeric(as.character(unlist(growth_stats[,id])))
+
+```
+
+
+1a. Start with a Univariate Growth Model
+```{r}
+# Global Executive Composite raw scores
+# with intercept only 
+ Intercept.only= ' i=~ 1*T3gecrs_combined_conv + 1*T12gecrs_conv + 1*T14gecrs_conv' 
+ Intercept.only.fit= growth(Intercept.only, data = growth_stats, missing= "ML")
+ summary (Intercept.only.fit)
+ semPaths(Intercept.only.fit, what = "paths", whatLabels= "est", layout = "tree")
+
+
+# with a fixed slope
+ fixed.slope= ' i=~ 1*T3gecrs_combined_conv + 1*T12gecrs_conv + 1*T14gecrs_conv
+ s=~ 0*T3gecrs_combined_conv + 1*T12gecrs_conv + 2*T14gecrs_conv
+ s ~~ 0*s'  #fixes slope
+ fixed.slope.fit= growth(fixed.slope, data = growth_stats, missing= "ML")
+ inspect(fixed.slope.fit, "cov.lv")
+ summary (fixed.slope.fit)
+ semPaths(fixed.slope.fit, what = "paths", whatLabels= "est", layout = "tree")
+
+# with a random slope
+
+ random.intercept= ' i=~ 1*T3gecrs_combined_conv + 1*T12gecrs_conv + 1*T14gecrs_conv
+ s=~ -1*T3gecrs_combined_conv + 0*T12gecrs_conv + 1*T14gecrs_conv'
+ random.intercept.fit= growth(random.intercept, data = growth_stats, missing= "ML")
+ summary (random.intercept.fit)
+ semPaths(random.intercept.fit, what = "paths", whatLabels= "est", layout = "tree")
+
+# compare models 
+ anova(Intercept.only.fit, fixed.slope)
+ anova(fixed.slope.fit, random.intercept.fit)
+
+```
+
+1b. Multivariate growth curves - start with this first (just using indicators - no latent variables)
+#As a rule of thumb you need at least three indicators for each latent variable.
+
+```{r, echo=FALSE, warning=FALSE}
+
+model.bi <- '
+#create global composite EF growth model
+    i.p =~ 1*T3gecrs_combined_conv + 1*T12gecrs_conv + 1*T14gecrs_conv
+    s.p =~ 0*T3gecrs_combined_conv + 1*T12gecrs_conv + 2*T14gecrs_conv 
+
+#create Global efficiency growth model 
+    i.n =~ 1*S1_FPNGEK1to5 + 1*S2_FPNGEK1to5 + 1*S3_FPNGEK1to5 
+    s.n =~ 0*S1_FPNGEK1to5 + 1*S2_FPNGEK1to5 + 2*S3_FPNGEK1to5 
+'
+fit.bi <- growth(model.bi, missing = "ML", data = growth_stats)
+summary(fit.bi)
+varTable(fit.bi)
+
+inspect(fit.bi, what = "free")
+
+# if you get a negative variance (LV ~~0*LV)
+
+
+```
+
+
+
+#2a. Second order growth models - on BRIEF (using BRIEF composite scores (GEC = BRI + MI)
+#Begin with a simple CFA to determine if latent variable is appropriate
+
+```{r, warning = FALSE}
+
+BRI.model <- ' BRI.T3 =~ T3_inhibrs + T3_shftrs + T3_emcnrs ' 
+fit= cfa(BRI.model, data=growth_stats, missing= "ML")
+summary(fit, fit.measures=TRUE)
+```
+
+#2b. Build second order growth models 
+```{r}
+sec.order <- '
+###define latent variables
+BRI_T3 =~ NA*T3_inhibrs + L1*T3_inhibrs + L2*T3_shftrs + L3*T3_emcnrs 
+BRI_T12 =~ NA*T12_inhibrs + L1*T12_inhibrs + L2*T12_shftrs + L3*T12_emcnrs 
+BRI_T14 =~ NA*T14_inhibrs + L1*T14_inhibrs + L2*T14_shftrs + L3*T14_emcnrs 
+
+
+### intercepts
+T3_inhibrs ~ t1*1
+T3_shftrs ~ t2*1
+T3_emcnrs ~ t3*1
+
+T12_inhibrs ~ t1*1
+T12_shftrs ~ t2*1
+T12_emcnrs ~ t3*1
+
+T14_inhibrs ~ t1*1
+T14_shftrs ~ t2*1
+T14_emcnrs ~ t3*1
+
+#this is setting the means equal across waves
+
+## correlated residuals across time
+T3_inhibrs ~~ T12_inhibrs + T14_inhibrs
+T12_inhibrs ~~ T14_inhibrs
+T3_shftrs ~~ T12_shftrs + T14_shftrs
+T12_shftrs ~~ T14_shftrs
+T3_emcnrs ~~ T12_emcnrs + T14_emcnrs 
+T12_emcnrs ~~ T14_emcnrs
+
+## latent variable intercepts
+BRI_T3 ~ 0*1
+BRI_T12 ~ 0*1
+BRI_T14 ~ 0*1
+
+#model constraints for effect coding
+## loadings must average to 1 (the three here changes to how many indicators you have; so change this based on the # of indicators)
+L1 == 2 - L2
+## means of indicators must average to 0 (in terms of the indicator means; )
+t1 == 0 - t2
+
+#the intercept and slope done with effect coding will give you the actual metric from your indicator variables (puts it in whatever metric you were measuring them in)
+
+#final step is the normal growth model
+i =~ 1*BRI_T3 + 1*BRI_T12 + 1*BRI_T14
+s =~ 0*BRI_T3 + 1*BRI_T12 + 2*BRI_T14 '
+
+fit.sec.order <- growth(sec.order, data=growth_stats, missing = "ML")
+summary(fit.sec.order, fit.measures=TRUE)
+
+
+#josh's code
+#fit.sec.order <- growth(sec.order, data=long, missing = "ML")
+#summary(fit.sec.order, fit.measures=TRUE)
+```
+
+
+3. Semplots 
+```{r, echo=FALSE, warning=FALSE}
+semPaths(fit.sec.order, whatLabels = "std")
+semPaths(fit.sec.order, what = "std")
+```
+
+
+#For longitudinal models, occasion specific variance can lead to biased estimates. We want to separate the time specific variance from the overall construct variance. Or, we want to make sure that the time specific variance doesn’t make it appear that a construct is changing when really it is not.
