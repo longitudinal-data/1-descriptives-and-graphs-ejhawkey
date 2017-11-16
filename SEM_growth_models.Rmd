@@ -109,12 +109,15 @@ summary(fit, fit.measures=TRUE)
 ```{r}
 sec.order <- '
 ###define latent variables
+#NA This is freeing the default of the marker variable method, and labeling the indicators
 BRI_T3 =~ NA*T3_inhibrs + L1*T3_inhibrs + L2*T3_shftrs + L3*T3_emcnrs 
 BRI_T12 =~ NA*T12_inhibrs + L1*T12_inhibrs + L2*T12_shftrs + L3*T12_emcnrs 
 BRI_T14 =~ NA*T14_inhibrs + L1*T14_inhibrs + L2*T14_shftrs + L3*T14_emcnrs 
 
 
-### intercepts
+### intercepts; setting the mean of each indicator (imposing measurement invariance)
+#this is setting the means equal across waves
+#in lavaan code whenever you put *1 here it is referring to the intercept
 T3_inhibrs ~ t1*1
 T3_shftrs ~ t2*1
 T3_emcnrs ~ t3*1
@@ -127,9 +130,8 @@ T14_inhibrs ~ t1*1
 T14_shftrs ~ t2*1
 T14_emcnrs ~ t3*1
 
-#this is setting the means equal across waves
 
-## correlated residuals across time
+## correlated residuals across time; occassion specific variance that is not common to the latent factor
 T3_inhibrs ~~ T12_inhibrs + T14_inhibrs
 T12_inhibrs ~~ T14_inhibrs
 T3_shftrs ~~ T12_shftrs + T14_shftrs
@@ -137,30 +139,27 @@ T12_shftrs ~~ T14_shftrs
 T3_emcnrs ~~ T12_emcnrs + T14_emcnrs 
 T12_emcnrs ~~ T14_emcnrs
 
-## latent variable intercepts
+## latent variable intercepts; constrains the means of the latent variable intercepts to 0
+#the reason that you do this is so that the means will be pushed up to the second order LVs
 BRI_T3 ~ 0*1
 BRI_T12 ~ 0*1
 BRI_T14 ~ 0*1
 
-#model constraints for effect coding
-## loadings must average to 1 (the three here changes to how many indicators you have; so change this based on the # of indicators)
-L1 == 2 - L2
-## means of indicators must average to 0 (in terms of the indicator means; )
-t1 == 0 - t2
+#model constraints for effect coding (this part is not necessary); but it creats effect #coding: loadings must average to 1 (the three here changes to how many indicators you have; so change this based on the # of indicators)
+#try it with and without this, should make models easier to interpret
+L1 == 3 - L2 - L3
+## means of indicators must average to 0 (in terms of the indicator means)
+t1 == 0 - t2 - t3
 
 #the intercept and slope done with effect coding will give you the actual metric from your indicator variables (puts it in whatever metric you were measuring them in)
 
-#final step is the normal growth model
+#final step is defining the normal growth model
 i =~ 1*BRI_T3 + 1*BRI_T12 + 1*BRI_T14
 s =~ 0*BRI_T3 + 1*BRI_T12 + 2*BRI_T14 '
 
 fit.sec.order <- growth(sec.order, data=growth_stats, missing = "ML")
 summary(fit.sec.order, fit.measures=TRUE)
 
-
-#josh's code
-#fit.sec.order <- growth(sec.order, data=long, missing = "ML")
-#summary(fit.sec.order, fit.measures=TRUE)
 ```
 
 
