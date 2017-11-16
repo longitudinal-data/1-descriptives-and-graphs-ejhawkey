@@ -103,6 +103,7 @@ BRI.model <- ' BRI.T3 =~ T3_inhibrs + T3_shftrs + T3_emcnrs '
 fit= cfa(BRI.model, data=growth_stats, missing= "ML")
 ##Options: std.lv = TRUE: standardizes latent var. (but not your results) uses fixed factor method
 summary(fit, fit.measures=TRUE)
+#std.fit
 ```
 
 #2b. Build second order growth models 
@@ -165,12 +166,12 @@ summary(fit.sec.order, fit.measures=TRUE)
 
 #Semplots 
 ```{r, echo=FALSE, warning=FALSE}
-semPaths(fit.sec.order, whatLabels = "std")
+semPaths(fit.sec.order, whatLabels = "est")
 ```
 
 #Semplots 
 ```{r, echo=FALSE, warning=FALSE}
-semPaths(fit.sec.order, what = "std")
+semPaths(fit.sec.order, what = "est")
 ```
 
 
