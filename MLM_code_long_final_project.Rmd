@@ -1,0 +1,297 @@
+---
+title: "PDS_longitudinal_MLM"
+author: "Elizabeth Hawkey"
+date: "11/29/2017"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+    #code_folding: "hide"
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Project Overview: Examine the time-varying relationship between brain network metric (global efficiency), and parent reported executive funciton scores across 3 waves of scan data.
+
+###Step 1. Examine using a time-varying co-variate in lme4 using the Conners EF raw score and network gloal efficiency (GE) in FPN, DAN, SAL, CON. Examine multiple time variables and covariates
+
+###Step 2. Compare GE to average within network connectivity. We would expect these to be very similar (no sig. difference)
+
+###Step 3. Examine the time-varying relationship between EF and ADHD symptoms (we would expect this to be very significant), and MDD symptoms (possibly sig.)
+
+##Data Management
+```{r cars}
+#load lme4 package: lme4 provides functions for fitting and analyzing mixed models: linear (lmer), 
+#generalized linear (glmer) and nonlinear (nlmer.)
+library(lme4)
+library(tidyverse)
+library(broom)
+library(tidyr)
+library(merTools)
+library(semTools)
+library(semPlot)
+library(ggplot2)
+
+#compute average efficiency metrics in SPSS prior to brining in dataset
+#load in newest dataset from Rebecca Tillman
+setwd("~/ejhawkey")
+PDS_data_mlm <- read.csv("~/Documents/PDS_project/Longitudinal_project/datasets/PDS_long_9_8_17_MLM.csv")
+#View(PDS_data_mlm)
+#print(names(PDS_data_mlm))
+
+
+#create a new variable to adjust age and EF to a scale that is closer to GE
+#agemo_converted <- PDS_data_mlm$AGEMOSCAN/100
+#CONP_EF_converted<- PDS_data_mlm$CONP_EF_T/100
+#add back to dataframe
+#PDS_data_mlm$agemo_converted <- as.numeric(agemo_converted)
+#PDS_data_mlm$CONP_EF_converted <- as.numeric(CONP_EF_converted)
+
+##Center predictor variables
+#remember: centering is not the same as standardizing; 
+#centering creates a zero mean; use when you don't need the units to be the same; you are changing the values not the scale
+#standardizing: converting to z-scores; units change, 1 unit is now 1 SD; so that you can compare the variables in the same unit
+
+##mean center by subject (so write a for loop for each subject to mean center each )
+BRIEFgects_scan_c <- scale(PDS_data_mlm$BRIEFgects_scan, center = T, scale = F)
+CONP_EF_RAW_c <- scale(PDS_data_mlm$CONP_EF_RAW, center = T, scale = F)
+CONT_EF_RAW_c <- scale(PDS_data_mlm$CONT_EF_RAW, center = T, scale = F)
+CONP_EF_T_c <- scale(PDS_data_mlm$CONP_EF_T, center = T, scale = F)
+AGEMOSCAN_c <- scale(PDS_data_mlm$AGEMOSCAN, center = T, scale = F)
+FPN_GE_K1to5_c <- scale(PDS_data_mlm$FPN_GE_K1to5, center = T, scale = F)	
+FPN_GE_K6to10_c <- scale(PDS_data_mlm$FPN_GE_K6to10, center = T, scale = F)	
+SAL_GE_K1to5_c <- scale(PDS_data_mlm$SAL_GE_K1to5, center = T, scale = F)	
+SAL_GE_K6to10_c <- scale(PDS_data_mlm$SAL_GE_K6to10, center = T, scale = F)
+DMN_GE_K1to5_c <- scale(PDS_data_mlm$DMN_GE_K1to5, center = T, scale = F)
+DMN_GE_K6to10_c <- scale(PDS_data_mlm$DMN_GE_K6to10, center = T, scale = F)
+CON_GE_K1to5_c <- scale(PDS_data_mlm$CON_GE_K1to5, center = T, scale = F)
+CON_GE_K6to10_c <- scale(PDS_data_mlm$CON_GE_K6to10, center = T, scale = F)
+
+#add the centered variables into the data frame
+PDS_data_mlm$BRIEFgects_scan_c <- as.numeric(BRIEFgects_scan_c)
+PDS_data_mlm$CONP_EF_RAW_c <- as.numeric(CONP_EF_RAW_c)
+PDS_data_mlm$CONP_EF_T_c <- as.numeric(CONP_EF_T_c)
+PDS_data_mlm$CONT_EF_RAW_c <- as.numeric(CONT_EF_RAW_c)
+PDS_data_mlm$AGEMOSCAN_c <- as.numeric(AGEMOSCAN_c)
+PDS_data_mlm$FPN_GE_K1to5_c <- as.numeric(FPN_GE_K1to5_c)
+PDS_data_mlm$FPN_GE_K6to10_c <- as.numeric(FPN_GE_K6to10_c)
+PDS_data_mlm$SAL_GE_K1to5_c <- as.numeric(SAL_GE_K1to5_c)
+PDS_data_mlm$SAL_GE_K6to10_c <- as.numeric(SAL_GE_K6to10_c)
+PDS_data_mlm$DMN_GE_K1to5_c <- as.numeric(DMN_GE_K1to5_c)
+PDS_data_mlm$DMN_GE_K6to10_c <- as.numeric(DMN_GE_K6to10_c)
+PDS_data_mlm$CON_GE_K1to5_c <- as.numeric(CON_GE_K1to5_c)
+PDS_data_mlm$CON_GE_K6to10_c <- as.numeric(CON_GE_K6to10_c)
+
+###center by person
+#aggregate per subject all IVs and DVs
+#cell_agg = cell %>% group_by(ID) %>%
+#  summarize(acc_mean = mean)
+
+###subset for scan 2, 3
+#PDS_data_mlm.2.3 <- subset(PDS_data_mlm, scan_wave == 2:3)
+#PDS_data_mlm.3 <- subset(PDS_data_mlm, scan_wave == 3)
+
+
+write.csv(PDS_data_mlm, file = "~/Documents/PDS_project/Longitudinal_project/datasets/PDS_long_final.csv")
+
+PDS_data_mlm <- read.csv(file = "~/Documents/PDS_project/Longitudinal_project/datasets/PDS_long_09_9_17_final.csv")
+
+##START FROM HERE FOR ANALYSES
+```
+
+###setting up the models from class on 9/7
+###lmer(y ~ 1 + time + (1 + time | subjects), data = data)
+###lmer(y ~ time + (time|Subid), data = data)  - both are equivalent
+###outside the parentheses: fixed effects
+###terms inside the parentheses (how we specify random effects 1 = not every indiv. will have the same intercept value
+### pipe (|) denotes nesting variable (for us it is subject level identifier))
+
+
+## Global Efficiency models with Conners EF prediciton GE
+###Salience Network
+```{r, warning = FALSE}
+##SAL
+mod.SAL.GE1a <- lmer(SAL_GE_K1to5 ~ agemo_converted + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.SAL.GE1a)
+mod.SAL.GE1b <- lmer(SAL_GE_K1to5 ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.SAL.GE1b)
+
+PDS_data_mlm.na.rm <- subset(PDS_data_mlm, SAL_GE_K1to5 > 0)
+PDS_data_mlm.na <- subset(PDS_data_mlm.na.rm, CONP_EF_RAW_c >0)
+
+##just main effects alone; very similar to main effects in interaction model; no need to report this
+#mod.SAL.GE1c <- lmer(SAL_GE_K1to5 ~ CONP_EF_RAW_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm.na.rm)
+#summary(mod.SAL.GE1c)
+
+mod.SAL.GE2a <- lmer(SAL_GE_K6to10 ~ agemo_converted + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.SAL.GE2a)
+mod.SAL.GE2b <- lmer(SAL_GE_K6to10 ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.SAL.GE2b)
+
+```
+
+
+###Cingulo-opercular Network
+```{r, eval=FALSE}
+##CON
+mod.CON.GE1a <- lmer(CON_GE_K1to5 ~ agemo_converted+ sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.CON.GE1a)
+mod.CON.GE1b <- lmer(CON_GE_K1to5 ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.CON.GE1b)
+
+mod.CON.GE2 <- lmer(CON_GE_K6to10 ~ agemo_converted + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.CON.GE2)
+mod.CON.GE2 <- lmer(CON_GE_K6to10 ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.CON.GE2)
+```
+
+
+###Frontoparietal Network
+```{r}
+##FPN
+mod.FPN.GE1a <- lmer(FPN_GE_K1to5 ~ agemo_converted + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.FPN.GE1a)
+mod.FPN.GE1b <- lmer(FPN_GE_K1to5 ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.FPN.GE1b)
+
+mod.FPN.GE2a <- lmer(FPN_GE_K6to10 ~ agemo_converted + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.FPN.GE2a)
+mod.FPN.GE2b <- lmer(FPN_GE_K6to10 ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.FPN.GE2b)
+
+#anova(mod.FPN.GE2a, mod.FPN.GE2b)
+```
+
+
+###Default Mode Network
+```{r}
+#DMN
+mod.DMN.GE1a <- lmer(DMN_GE_K1to5 ~ agemo_converted + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.DMN.GE1a)
+mod.DMN.GE1b <- lmer(DMN_GE_K1to5 ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.DMN.GE1b)
+
+mod.DMN.GE2a <- lmer(DMN_GE_K6to10 ~ agemo_converted + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.DMN.GE2a)
+mod.DMN.GE2b <- lmer(DMN_GE_K6to10 ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.DMN.GE2b)
+```
+
+###AVERAGE WITHIN CONNECTIVITY
+```{r}
+##AVERAGE WITHIN CONNECTIVITY
+mod.SAL <- lmer(SAL_SAL ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.SAL)
+
+mod.CON <- lmer(CON_CON ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.CON)
+
+mod.DMN <- lmer(DMN_DMN ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.DMN)
+
+mod.FPN <- lmer(FPN_FPN ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.FPN)
+```
+
+
+##ADHD 
+```{r}
+#ADHDsum; parent 
+mod.ADHD1 <- lmer(ADHDsum ~ agemo_converted + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD1)
+anova(mod.ADHD1)
+mod.ADHD2 <- lmer(ADHDsum ~ agemo_converted*CONP_EF_RAW_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD2)
+mod.ADHD3 <- lmer(ADHDsum ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD3)
+
+#ADHD_INsum
+mod.ADHDIN <- lmer(ADHD_INsum ~ agemo_converted*CONP_EF_RAW_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHDIN)
+
+#ADHD_HYIMsum
+mod.ADHDHY <- lmer(ADHD_HYIMsum ~ agemo_converted*CONP_EF_RAW_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHDHY)
+
+##EF and MDD
+mod.MDD1 <- lmer(MDDCorescan ~ agemo_converted + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.MDD1)
+mod.MDD2 <- lmer(MDDCorescan ~ agemo_converted*CONP_EF_RAW_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.MDD2)
+mod.MDD3 <- lmer(MDDCorescan ~ agemo_converted*CONP_EF_RAW_c + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.MDD3)
+
+##Next do GE predicting ADHD
+#ADHDsum
+
+mod.ADHD.SAL1 <- lmer(ADHDsum ~ agemo_converted*SAL_GE_K1to5_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD.SAL1)
+mod.ADHD.SAL2 <- lmer(ADHDsum ~ agemo_converted*SAL_GE_K6to10_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD.SAL2)
+
+mod.ADHD.CON1 <- lmer(ADHDsum ~ agemo_converted*CON_GE_K1to5_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD.CON1)
+mod.ADHD.CON2 <- lmer(ADHDsum ~ agemo_converted*CON_GE_K6to10_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD.CON2)
+
+mod.ADHD.FPN1 <- lmer(ADHDsum ~ agemo_converted*FPN_GE_K1to5_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD.FPN1)
+mod.ADHD.FPN2 <- lmer(ADHDsum ~ agemo_converted*FPN_GE_K6to10_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD.FPN2)
+
+mod.ADHD.DMN1 <- lmer(ADHDsum ~ agemo_converted*DMN_GE_K1to5_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD.DMN1)
+mod.ADHD.DMN2 <- lmer(ADHDsum ~ agemo_converted*DMN_GE_K6to10_c + (agemo_converted | Subid_fMRI), data=PDS_data_mlm)
+summary(mod.ADHD.DMN2)
+```
+
+
+```{r}
+##output sig. models together in one table; breatk it up by analysis type?
+#library(sjPlot)
+#sjt.lm(mod.ADHD.SAL1 , mod.ADHD.SAL2, file = "sjt.ADHD.SAL.doc")
+#sjt.lm(adhdmodel1, adhdmodel2, adhdmodel3, adhdmodel4, adhdmodel5, file = "sjt_adhd.doc")
+
+```
+
+
+### Data Visualization
+```{r pressure, echo=FALSE, warning=FALSE}
+##make pretty plots
+plot.connersEF <- ggplot(PDS_data_mlm, aes(x = AGEMOSCAN, y = CONP_EF_RAW_c, group = Subid_fMRI)) +
+  geom_point() + 
+  geom_line(alpha = .5) + 
+  aes(colour = factor(Subid_fMRI)) + 
+  guides(colour=FALSE) +
+  theme_classic()
+plot.connersEF
+
+plot.adhdsum <- ggplot(PDS_data_mlm, aes(x = AGEMOSCAN, y = ADHDsum, group = Subid_fMRI)) +
+  geom_point() + 
+  geom_line(alpha = .5) + 
+  aes(colour = factor(Subid_fMRI)) + 
+  guides(colour=FALSE) +
+  theme_classic()
+plot.adhdsum
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+###Additional analyses: Teacher
+```{r}
+#ADHDsum; teacher
+#PDS_data_mlm_T_na <- subset(PDS_data_mlm, CONT_EF_RAW >= 0)
+
+#mod.T.ADHD0 <- lm(ADHDsum ~ CONT_EF_RAW + sex, data = PDS_data_mlm_teacher)
+#summary(mod.T.ADHD0)
+#mod.T.ADHD1 <- lmer(ADHDsum ~ agemo_converted + (1 | Subid_fMRI), data=PDS_data_mlm_T_na)
+#summary(mod.T.ADHD1)
+#mod.T.ADHD2 <- lmer(ADHDsum ~ CONT_EF_RAW + (agemo_converted | Subid_fMRI), data = PDS_data_mlm_T_na)
+#summary(mod.T.ADHD2)
+#mod.T.ADHD3 <- lmer(ADHDsum ~ agemo_converted*CONT_EF_RAW + sex + (agemo_converted | Subid_fMRI), data=PDS_data_mlm_T_na)
+#summary(mod.T.ADHD3)
+#this isn't working
+```
+

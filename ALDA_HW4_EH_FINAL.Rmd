@@ -1,0 +1,234 @@
+---
+title: "ALDA_HW4_EH"
+author: "Elizabeth Hawkey"
+date: "10/30/2017"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+##data management
+```{r, echo = FALSE}
+library(lme4)
+library(tidyverse)
+library(broom)
+library(tidyr)
+library(merTools)
+library(semTools)
+library(semPlot)
+library(Matrix)
+library(dplyr)
+library(psych)
+
+#this dataset is wide
+PDS_stats <- read.csv(file =  "~/ejhawkey/STATS_resting_state_BRIEF3.csv")
+growth_stats <- read.csv(file =  "~/ejhawkey/STATS_resting_state_BRIEF.csv")
+
+#convert variables
+growth_stats$T3gecrs_combined_conv <- as.numeric(growth_stats$T3_gecrscombined/100)
+growth_stats$T12gecrs_conv  <- as.numeric(growth_stats$T12_gecrs/100)
+growth_stats$T14gecrs_conv=growth_stats$T14_gecrs/100
+
+```
+
+#1. 1. Fit a measurement model to your constructs at one time point. Try out the different types of scaling discussed in class. What changes what stays the same?
+
+##The fit statistics are the same across the two models but the covariances change.
+```{r, warning = FALSE}
+
+#Global executive compposit at T3
+GEC.model <- 'BRI_T3 =~ inhibrs_3 + shftrs_3 + emcnrs_3 
+              MI_T3 =~ initirs_3 + wrkmrs_3 + plorgrs_3 + orgmars_3 + monirs_3'
+
+
+#Options for scaling (Largely irrelevant as to what scale is chosen. Serves to establish a point of reference in interpret other parameters):
+#Marker variable (R default) Here you fix one factor loading to 1. All other loadings are relative to this loading.
+fit.GEC.marker <- cfa(GEC.model, data = PDS_stats, missing = "ML")
+summary(fit.GEC.marker, fit.measures = TRUE) 
+
+semPaths(fit.GEC.marker, whatLabels = "est")
+
+#Fixed variable: Here you fix the variance of the latent variable to 1 (standardized)
+fit.GEC.fixed <- cfa(GEC.model, data = PDS_stats, std.lv = T, missing = "ML")
+summary(fit.GEC.fixed, fit.measures = TRUE, standardized=TRUE) 
+
+semPaths(fit.GEC.fixed, whatLabels = "std")
+
+
+#Other option for scaling
+#3. Effect coding. Here you constrain loading to average to 1. 
+#This will be helpful for us as we can then put the scale of measurement into our original metric. #For longitudinal models this is helpful in terms of how to interpret the amount of change.
+```
+
+#2. What do the fit statistics say about your latent variable? Good/bad? Is your latent variable Just identified/saturdated, under identified or over identified?
+
+##RMSEA = 0.144, SRMR = 0.043; Is this contradictory since one is >.10 and one is <0.08?
+##CFI and TLI >.90, so this suggests that it is a good fit. 
+## NO negative variances
+##df = 19 In this model the knowns are greater than the unknowns (over identified)
+
+
+#3. Fit a longitudinal CFA model where you:
+#a) first correlate your latent factors across time and then a second model that predicts later times by a prevous time (ie auto regressive; t1 -> t2 -> t3). What are your conclusions? How does one differ from the other?
+
+```{r, echo=FALSE}
+# a) correlate latent factors across time
+Long.GEC.model <- '
+BRI_T3 =~ inhibrs_3 + shftrs_3 + emcnrs_3 
+MI_T3 =~ initirs_3 + wrkmrs_3 + plorgrs_3 + orgmars_3 + monirs_3
+
+BRI_T12 =~ inhibrs_12 + shftrs_12 + emcnrs_12 
+MI_T12 =~ initirs_12 + wrkmrs_12 + plorgrs_12 + orgmars_12 + monirs_12
+
+BRI_T14 =~ inhibrs_14 + shftrs_14 + emcnrs_14 
+MI_T14 =~ initirs_14 + wrkmrs_14 + plorgrs_14 + orgmars_14 + monirs_14
+
+
+## correlated residuals across time
+inhibrs_3 ~~ inhibrs_12 + inhibrs_14
+inhibrs_12 ~~ inhibrs_14
+shftrs_3 ~~ shftrs_12 + shftrs_14
+shftrs_12 ~~ shftrs_14
+emcnrs_3 ~~ emcnrs_12 + emcnrs_14
+emcnrs_12 ~~ emcnrs_14
+
+initirs_3 ~~ initirs_12 + initirs_14
+initirs_12 ~~ initirs_14
+wrkmrs_3 ~~ wrkmrs_12 + wrkmrs_14
+wrkmrs_12 ~~ wrkmrs_14
+plorgrs_3 ~~ plorgrs_12 + plorgrs_14
+plorgrs_12 ~~ plorgrs_14
+orgmars_3 ~~ orgmars_12 + orgmars_14
+orgmars_12 ~~ orgmars_14
+monirs_3 ~~ monirs_12 + monirs_14
+monirs_12 ~~ monirs_14'
+
+fit.long.cfa <- cfa(Long.GEC.model, data=PDS_stats, std.lv=TRUE, missing = "ML")
+summary(fit.long.cfa, standardized=TRUE, fit.measures=TRUE)
+semPaths(fit.long.cfa, whatLabels = "est")
+semPaths(fit.long.cfa, what = "std")
+
+```
+
+```{r}
+#look at correlations between variables
+#correlations <- select(PDS_stats, gecrscombined_3, gecrs_12, gecrs_14)
+#correlations <- select(PDS_stats, CONTEF_1, CONTEF_2, CONTEF_3, CONPEF_1, CONPEF_2, CONPEF_3)
+#correlations
+#cor(correlations, use = "pairwise.complete.obs")
+
+```
+
+#4. Fit a longitdinal growth model in SEM and in HLM. Compare and contrast the differences.
+
+```{r, warning=FALSE}
+##Univariate growth model: SEM
+#SEM with a fixed slope
+ fixed.slope= ' i=~ 1*CONPEF_1 + 1*CONPEF_2 + 1*CONPEF_3
+                s=~ 0*CONPEF_1 + 1*CONPEF_2 + 2*CONPEF_3
+                s ~~ 0*s'  #fixes slope
+ fixed.slope.fit= growth(fixed.slope, data = PDS_stats, missing= "ML")
+ inspect(fixed.slope.fit, "cov.lv")
+ summary (fixed.slope.fit)
+ semPaths(fixed.slope.fit, what = "paths", whatLabels= "est", layout = "tree")
+
+#SEM with a random slope
+ random.fit= ' i=~ 1*CONPEF_1 + 1*CONPEF_2 + 1*CONPEF_3
+              s=~ -1*CONPEF_1 + 0*CONPEF_2 + 1*CONPEF_3'
+ random.fit= growth(random.fit, data = PDS_stats, missing= "ML")
+ summary (random.fit)
+ semPaths(random.fit, what = "paths", whatLabels= "est", layout = "tree")
+
+# compare models 
+ anova(fixed.slope.fit, random.fit)
+
+
+##Growth model in MLM
+#Move data into a long format
+wide_to_long <- PDS_stats %>%
+  gather(sex_1:W3DMNGEK6to10_3, key = "time", value = "value") 
+#View(wide_to_long)
+
+wide_to_long_1 <- wide_to_long %>%
+  separate(time, into = c("var", "timepoint"), sep = "_", convert = TRUE) %>%
+  spread(key = var, value = value) %>%
+  arrange(Subid) 
+#View(wide_to_long_1)
+
+##Center predictor variables
+timepoint_c <- scale(wide_to_long_1$timepoint, center = T, scale = F)
+#add the centered variables into the data frame
+wide_to_long_1$timepoint_c <- as.numeric(timepoint_c)
+
+##CATEGORICAL TIME VARIABLE
+#a) only predicts the intercept
+mod.1 <- lmer(CONPEF ~ timepoint + (1|Subid), data = wide_to_long_1)
+summary(mod.1)
+
+#b) predicts both intercept and slope 
+mod.2 <- lmer(CONPEF ~ timepoint + (timepoint|Subid), data = wide_to_long_1)
+summary(mod.2)
+anova(mod.1, mod.2)
+
+
+#model comparison fit statistics show that the fixed slope is a better fit, indicating that individuals are not changing much over time
+```
+## The estimates for the fixed models are very similar, however the variance is larger in the MLM model since the SEM model does a better job estimating variance at each timepoint. In the random effect model, the estimates are also similar, although slightly smaller in the SEM model, and the variance is slightly higher in the SEM model.
+
+
+
+#5. Constrain the residual variances to be equal. Does this change the fit of your model?
+##The unconstrained model is a better fit, but only slightly and the p-value is non-significant. 
+```{r, warning=FALSE}
+constrain.residuals = ' i=~ 1*CONPEF_1 + 1*CONPEF_2 + 1*CONPEF_3
+                        s=~ 0*CONPEF_1 + 1*CONPEF_2 + 2*CONPEF_3
+                        CONPEF_1 ~~ a*CONPEF_1
+                        CONPEF_2 ~~ a*CONPEF_2
+                        CONPEF_3 ~~ a*CONPEF_3'
+constrain.residuals.fit= growth(constrain.residuals, data = PDS_stats, missing= "ML")
+ summary (constrain.residuals.fit)
+ anova(fixed.slope.fit, constrain.residuals.fit)
+```
+
+#6. Contrain your slope to be fixed, not random. How does this change your model?
+##The change is non-significant.
+```{r}
+constrain.slope = ' i=~ 1*CONPEF_1 + 1*CONPEF_2 + 1*CONPEF_3
+                    s=~ 0*CONPEF_1 + 1*CONPEF_2 + 2*CONPEF_3
+                        s ~ 0*s'
+constrain.slope= growth(constrain.slope, data = PDS_stats, missing= "ML")
+summary(constrain.slope)
+anova(random.fit, constrain.slope)
+```
+
+#7 Change the time metric in your SEM growth model. How does that change your estimates? Does it change your fit statistics?
+##The estimates are slightly smaller, and the fit statistics indicate that the first model is a significantly better fit.
+```{r, echo=FALSE, warning=FALSE}
+constrain.slope.time = ' i=~ 1*CONPEF_1 + 1*CONPEF_2 + 1*CONPEF_3
+                        s=~ -2*CONPEF_1 + -1*CONPEF_2 + 0*CONPEF_3
+                        s ~ 0*s'
+constrain.slope.time = growth(constrain.slope.time, data = PDS_stats, missing= "ML")
+summary(constrain.slope.time)
+anova(random.fit, constrain.slope.time)
+```
+
+#8. Try a different type of estimation (see lavaan tutorial for details). How does that change your model? #Default in lavaan is the ML estimator,There are a number of “robust” estimates that are uniformly better. MLR is Josh's choice if you go this route, but others are just as good and maybe better if you have complete data. "MLR": maximum likelihood estimation with robust (Huber-White) standard errors and a scaled test statistic that is (asymptotically) equal to the Yuan-Bentler test statistic. For both complete and incomplete data.
+##The fit is significantly better using MLR
+```{r, echo=FALSE, warning=FALSE}
+constrain.est = ' i=~ 1*CONPEF_1 + 1*CONPEF_2 + 1*CONPEF_3
+                  s=~ 0*CONPEF_1 + 1*CONPEF_2 + 2*CONPEF_3'
+constrain.est= growth(constrain.est, estimator = "MLR", data = PDS_stats)
+summary(constrain.est)
+anova(random.fit,constrain.est)
+
+semPaths(constrain.est, what = "paths", whatLabels= "est", layout = "tree")
+```
+
+
+#9. Provide semplots for each of the models (embedded throughout the code)
